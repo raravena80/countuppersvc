@@ -1,7 +1,7 @@
 # countuppersvc
 Sample count and uppercase service using go-kit
 
-From: [go-kit examples](http://github.com/go-kit/kit/examples)
+From: [go-kit examples](https://github.com/go-kit/kit/tree/master/examples)
 
 ## Run
 
