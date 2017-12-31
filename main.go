@@ -15,6 +15,7 @@ import (
 // StringService provides operations on strings.
 type StringService interface {
 	Uppercase(context.Context, string) (string, error)
+	Downcase(context.Context, string) (string, error)
 	Count(context.Context, string) int
 }
 
@@ -22,6 +23,13 @@ type StringService interface {
 type stringService struct{}
 
 func (stringService) Uppercase(_ context.Context, s string) (string, error) {
+	if s == "" {
+		return "", ErrEmpty
+	}
+	return strings.ToUpper(s), nil
+}
+
+func (stringService) Downcase(_ context.Context, s string) (string, error) {
 	if s == "" {
 		return "", ErrEmpty
 	}
@@ -41,6 +49,15 @@ type uppercaseRequest struct {
 }
 
 type uppercaseResponse struct {
+	V   string `json:"v"`
+	Err string `json:"err,omitempty"` // errors don't define JSON marshaling
+}
+
+type downcaseRequest struct {
+	S string `json:"s"`
+}
+
+type downcaseResponse struct {
 	V   string `json:"v"`
 	Err string `json:"err,omitempty"` // errors don't define JSON marshaling
 }
@@ -65,6 +82,17 @@ func makeUppercaseEndpoint(svc StringService) endpoint.Endpoint {
 	}
 }
 
+func makeDowncaseEndpoint(svc StringService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(downcaseRequest)
+		v, err := svc.Downcase(ctx, req.S)
+		if err != nil {
+			return downcaseResponse{v, err.Error()}, nil
+		}
+		return downcaseResponse{v, ""}, nil
+	}
+}
+
 func makeCountEndpoint(svc StringService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(countRequest)
@@ -83,6 +111,12 @@ func main() {
 		encodeResponse,
 	)
 
+	downcaseHandler := httptransport.NewServer(
+		makeDowncaseEndpoint(svc),
+		decodeDowncaseRequest,
+		encodeResponse,
+	)
+
 	countHandler := httptransport.NewServer(
 		makeCountEndpoint(svc),
 		decodeCountRequest,
@@ -90,12 +124,21 @@ func main() {
 	)
 
 	http.Handle("/uppercase", uppercaseHandler)
+	http.Handle("/downcase", downcaseHandler)
 	http.Handle("/count", countHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, error) {
 	var request uppercaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func decodeDowncaseRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var request downcaseRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return nil, err
 	}
