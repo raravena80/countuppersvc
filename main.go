@@ -14,6 +14,7 @@ import (
 
 // StringService provides operations on strings.
 type StringService interface {
+	Title(context.Context, string) (string, error)
 	Uppercase(context.Context, string) (string, error)
 	Downcase(context.Context, string) (string, error)
 	Count(context.Context, string) int
@@ -21,6 +22,13 @@ type StringService interface {
 
 // stringService is a concrete implementation of StringService
 type stringService struct{}
+
+func (stringService) Title(_ context.Context, s string) (string, error) {
+	if s == "" {
+		return "", ErrEmpty
+	}
+	return strings.Title(s), nil
+}
 
 func (stringService) Uppercase(_ context.Context, s string) (string, error) {
 	if s == "" {
@@ -44,6 +52,15 @@ func (stringService) Count(_ context.Context, s string) int {
 var ErrEmpty = errors.New("empty string")
 
 // For each method, we define request and response structs
+type titleRequest struct {
+	S string `json:"s"`
+}
+
+type titleResponse struct {
+	V   string `json:"v"`
+	Err string `json:"err,omitempty"` // errors don't define JSON marshaling
+}
+
 type uppercaseRequest struct {
 	S string `json:"s"`
 }
@@ -71,6 +88,17 @@ type countResponse struct {
 }
 
 // Endpoints are a primary abstraction in go-kit. An endpoint represents a single RPC (method in our service interface)
+func makeTitleEndpoint(svc StringService) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (interface{}, error) {
+		req := request.(uppercaseRequest)
+		v, err := svc.Uppercase(ctx, req.S)
+		if err != nil {
+			return uppercaseResponse{v, err.Error()}, nil
+		}
+		return uppercaseResponse{v, ""}, nil
+	}
+}
+
 func makeUppercaseEndpoint(svc StringService) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(uppercaseRequest)
@@ -105,6 +133,12 @@ func makeCountEndpoint(svc StringService) endpoint.Endpoint {
 func main() {
 	svc := stringService{}
 
+	titleHandler := httptransport.NewServer(
+		makeTitleEndpoint(svc),
+		decodeTitleRequest,
+		encodeResponse,
+	)
+
 	uppercaseHandler := httptransport.NewServer(
 		makeUppercaseEndpoint(svc),
 		decodeUppercaseRequest,
@@ -123,10 +157,19 @@ func main() {
 		encodeResponse,
 	)
 
+	http.Handle("/title", titleHandler)
 	http.Handle("/uppercase", uppercaseHandler)
 	http.Handle("/downcase", downcaseHandler)
 	http.Handle("/count", countHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func decodeTitleRequest(_ context.Context, r *http.Request) (interface{}, error) {
+	var request titleRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return nil, err
+	}
+	return request, nil
 }
 
 func decodeUppercaseRequest(_ context.Context, r *http.Request) (interface{}, error) {
