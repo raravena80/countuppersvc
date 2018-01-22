@@ -3,10 +3,20 @@ Sample count and uppercase service using go-kit
 
 From: [go-kit examples](https://github.com/go-kit/kit/tree/master/examples)
 
+## Build
+
+```
+go build .
+```
+
 ## Run
 
 ```
 go run main.go
+```
+or after build
+```
+counteruppersvc
 ```
 
 ## Use
